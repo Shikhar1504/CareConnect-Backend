@@ -1,0 +1,116 @@
+import mongoose from 'mongoose';
+import Patient from '../models/Patient.js';
+import ClinicalNote from '../models/ClinicalNote.js';
+import RiskAssessment from '../models/RiskAssessment.js';
+
+
+// =======================
+// Admit Patient
+// =======================
+const admitPatient = async (patientData, noteText, assignedDoctorId) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    // 1️⃣ Create Patient
+    const patient = await Patient.create([{
+      patientId: `PAT-${Date.now()}`,
+      name: patientData.name,
+      age: patientData.age,
+      phone:patientData.phone,
+      vitals: patientData.vitals,
+      status: 'admitted',
+      assignedDoctor: assignedDoctorId
+    }], { session });
+
+    const createdPatient = patient[0];
+
+    // 2️⃣ Save admission note
+    let savedNoteText = '';
+
+    if (noteText) {
+      await ClinicalNote.create([{
+        patientId: createdPatient._id,
+        text: noteText,
+        type: 'admission',
+        createdBy: assignedDoctorId
+      }], { session });
+
+      savedNoteText = noteText;
+    }
+
+    // 3️⃣ AI Risk Calculation
+    try {
+      const aiService = await import('./ai.service.js');
+      await aiService.predictRisk(createdPatient, savedNoteText);
+    } catch (err) {
+      console.warn('AI service failed:', err.message);
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return { patient: createdPatient };
+
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    throw error;
+  }
+};
+
+
+// =======================
+// Get Patients List
+// =======================
+const getPatientsList = async (doctorId, page = 1, limit = 10) => {
+  const skip = (page - 1) * limit;
+
+  const patients = await Patient.find({ assignedDoctor: doctorId })
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit)
+    .select('name age status trajectory createdAt')
+    .populate('assignedDoctor', 'name role');
+
+  const total = await Patient.countDocuments({ assignedDoctor: doctorId });
+
+  return {
+    total,
+    page,
+    limit,
+    data: patients
+  };
+};
+
+
+// =======================
+// Get Patient Profile
+// =======================
+const getPatientProfile = async (patientId) => {
+  const patient = await Patient.findById(patientId)
+    .populate('assignedDoctor', 'name role');
+
+  if (!patient) throw new Error('Patient not found');
+
+  const notes = await ClinicalNote.find({ patientId })
+    .sort({ createdAt: -1 })
+    .limit(20);
+
+  const riskAssessments = await RiskAssessment.find({ patientId })
+    .sort({ createdAt: -1 })
+    .limit(10);
+
+  return {
+    ...patient.toObject(),
+    notes,
+    riskAssessments,
+  };
+};
+
+
+export {
+  admitPatient,
+  getPatientsList,
+  getPatientProfile,
+};
