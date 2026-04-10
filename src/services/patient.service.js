@@ -63,17 +63,92 @@ const admitPatient = async (patientData, noteText, assignedDoctorId) => {
 // =======================
 // Get Patients List
 // =======================
+// const getPatientsList = async (doctorId, page = 1, limit = 10) => {
+//   const skip = (page - 1) * limit;
+
+//   const patients = await Patient.find({ assignedDoctor: doctorId })
+//     .sort({ createdAt: -1 })
+//     .skip(skip)
+//     .limit(limit)
+//     .select('name age status trajectory createdAt')
+//     .populate('assignedDoctor', 'name role');
+
+//   const total = await Patient.countDocuments({ assignedDoctor: doctorId });
+
+//   return {
+//     total,
+//     page,
+//     limit,
+//     data: patients
+//   };
+// };
+
 const getPatientsList = async (doctorId, page = 1, limit = 10) => {
   const skip = (page - 1) * limit;
 
-  const patients = await Patient.find({ assignedDoctor: doctorId })
-    .sort({ createdAt: -1 })
-    .skip(skip)
-    .limit(limit)
-    .select('name age status trajectory createdAt')
-    .populate('assignedDoctor', 'name role');
+  const patients = await Patient.aggregate([
+    // 1️⃣ Only logged-in doctor patients
+    {
+      $match: {
+        assignedDoctor: new mongoose.Types.ObjectId(doctorId)
+      }
+    },
 
-  const total = await Patient.countDocuments({ assignedDoctor: doctorId });
+    // 2️⃣ Join risk assessments
+    {
+      $lookup: {
+        from: 'riskassessments',
+        localField: '_id',
+        foreignField: 'patientId',
+        as: 'riskData'
+      }
+    },
+
+    // 3️⃣ Get latest risk (last element)
+    {
+      $addFields: {
+        latestRisk: { $arrayElemAt: ['$riskData', -1] }
+      }
+    },
+
+    // 4️⃣ Extract risk score safely
+    {
+      $addFields: {
+        riskScore: {
+          $ifNull: ['$latestRisk.baseScore', 0]
+        }
+      }
+    },
+
+    // 5️⃣ SORT by risk (dashboard requirement 🔥)
+    {
+      $sort: { riskScore: -1 }
+    },
+
+    // 6️⃣ Pagination
+    { $skip: skip },
+    { $limit: limit },
+
+    // 7️⃣ Return only what frontend needs
+    {
+      $project: {
+        name: 1,
+        age: 1,
+        vitals: 1,
+        status: 1,
+        trajectory: 1,
+        riskScore: 1,
+        hasActiveAlert: 1,
+        notesCount: 1,
+        assignedDoctor: 1,
+        createdAt: 1
+      }
+    }
+  ]);
+
+  const total = await Patient.countDocuments({
+    assignedDoctor: doctorId
+  });
 
   return {
     total,

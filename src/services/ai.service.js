@@ -87,6 +87,43 @@ const predictRisk = async (patient, noteText) => {
 // =======================
 // 2️⃣ Simulate Risk (What-if)
 // =======================
+// const simulateRisk = async (patientId, modifiedParams) => {
+//   try {
+//     const patient = await Patient.findById(patientId);
+//     if (!patient) throw new Error('Patient not found');
+
+//     const previousRisk = await RiskAssessment.findOne({ patientId })
+//       .sort({ createdAt: -1 });
+
+//     let newScore = previousRisk ? previousRisk.baseScore : 50;
+
+//     // 🔥 Simulation logic
+//     if (modifiedParams.homeNurse) newScore -= 15;
+//     if (modifiedParams.medicationAdherence === false) newScore += 20;
+//     if (modifiedParams.dietImprovement) newScore -= 10;
+
+//     newScore = Math.max(0, Math.min(100, newScore));
+
+//     const delta = previousRisk
+//       ? newScore - previousRisk.baseScore
+//       : 0;
+
+//     return {
+//       previousScore: previousRisk?.baseScore || null,
+//       simulatedScore: newScore,
+//       delta,
+//       explanation:
+//         delta > 0
+//           ? 'Risk increased due to negative factors'
+//           : delta < 0
+//           ? 'Risk reduced due to positive interventions'
+//           : 'No significant change in risk',
+//     };
+//   } catch (error) {
+//     throw new Error('Simulation failed: ' + error.message);
+//   }
+// };
+
 const simulateRisk = async (patientId, modifiedParams) => {
   try {
     const patient = await Patient.findById(patientId);
@@ -95,30 +132,49 @@ const simulateRisk = async (patientId, modifiedParams) => {
     const previousRisk = await RiskAssessment.findOne({ patientId })
       .sort({ createdAt: -1 });
 
-    let newScore = previousRisk ? previousRisk.baseScore : 50;
+    let baseScore = previousRisk ? previousRisk.baseScore : 50;
+    let newScore = baseScore;
 
-    // 🔥 Simulation logic
-    if (modifiedParams.homeNurse) newScore -= 15;
+    // =======================
+    // 🔥 Simulation logic (extended)
+    // =======================
+
+    if (modifiedParams.homeNurse) newScore -= 20;
+    if (modifiedParams.telehealth) newScore -= 14;
+    if (modifiedParams.medicationReminder) newScore -= 10;
+    if (modifiedParams.dietPlan) newScore -= 5;
+
     if (modifiedParams.medicationAdherence === false) newScore += 20;
-    if (modifiedParams.dietImprovement) newScore -= 10;
 
+    // Clamp
     newScore = Math.max(0, Math.min(100, newScore));
 
-    const delta = previousRisk
-      ? newScore - previousRisk.baseScore
-      : 0;
+    const delta = newScore - baseScore;
+
+    // =======================
+    // 🔥 Explanation (better)
+    // =======================
+    let explanation = 'No significant change in risk';
+
+    if (delta > 0) {
+      explanation = 'Risk increased due to negative factors';
+    } else if (delta < 0) {
+      explanation = 'Risk reduced due to applied interventions';
+    }
+
+    // =======================
+    // 🔥 Include SHAP factors
+    // =======================
+    const shapFactors = previousRisk?.shapFactors || [];
 
     return {
-      previousScore: previousRisk?.baseScore || null,
+      previousScore: baseScore,
       simulatedScore: newScore,
       delta,
-      explanation:
-        delta > 0
-          ? 'Risk increased due to negative factors'
-          : delta < 0
-          ? 'Risk reduced due to positive interventions'
-          : 'No significant change in risk',
+      explanation,
+      shapFactors   // ✅ IMPORTANT (for XAI UI)
     };
+
   } catch (error) {
     throw new Error('Simulation failed: ' + error.message);
   }
