@@ -12,6 +12,8 @@ import patientRoutes from './src/routes/patient.routes.js';
 import aiRoutes from './src/routes/ai.routes.js';
 import communicationRoutes from './src/routes/communication.routes.js';
 import analyticsRoutes from './src/routes/analytics.routes.js';
+import alertRoutes from './src/routes/alert.routes.js';
+import checkinRoutes from './src/routes/checkin.routes.js';
 
 const app = express();
 
@@ -30,6 +32,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/patients', patientRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/alerts', alertRoutes);
+app.use('/api/patient', checkinRoutes);
 app.use('/api', communicationRoutes);
 
 // Health check

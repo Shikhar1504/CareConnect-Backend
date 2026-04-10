@@ -49,6 +49,14 @@ const alertSchema = new mongoose.Schema({
 
   meta: mongoose.Schema.Types.Mixed,
 
+  chat: [
+    {
+      sender: { type: String, enum: ['bot', 'patient'] },
+      message: String,
+      createdAt: { type: Date, default: Date.now }
+    }
+  ]
+
 }, { timestamps: true });
 
 // 🔥 Index for fast dashboard queries

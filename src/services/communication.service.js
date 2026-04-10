@@ -69,33 +69,44 @@ patients.forEach(p => {
     return;
   }
 
-  if (text.includes('NO')) {
+  let alert;
+
+  if (text.includes('no') || text.includes('not')) {
     const existingAlert = await Alert.findOne({
       patientId: patient._id,
       status: 'open',
     });
 
-    if (existingAlert) return;
+    const botMessage = 'I have notified your care team. Someone will call you shortly.';
 
-    const alert = await Alert.create({
-      patientId: patient._id,
-      message: `Patient replied "${body}" to follow-up.`,
-      severity: 'high',
-      status: 'open',
-      source: 'Twilio SMS',
-      meta: {
-        reply: body,
-        phone: normalizedPhone,
-      },
-    });
+    if (existingAlert) {
+      existingAlert.chat.push({ sender: 'patient', message: body });
+      existingAlert.chat.push({ sender: 'bot', message: botMessage });
+      await existingAlert.save();
+      alert = existingAlert;
+    } else {
+      alert = await Alert.create({
+        patientId: patient._id,
+        message: `Patient replied "${body}" to follow-up.`,
+        severity: 'high',
+        status: 'open',
+        source: 'Twilio SMS',
+        meta: {
+          reply: body,
+          phone: normalizedPhone,
+        },
+        chat: [
+          { sender: 'patient', message: body },
+          { sender: 'bot', message: botMessage }
+        ]
+      });
 
-    await Patient.findByIdAndUpdate(patient._id, {
-      hasActiveAlert: true,
-    });
+      await Patient.findByIdAndUpdate(patient._id, {
+        hasActiveAlert: true,
+      });
 
-    console.log(
-      `[WEBSOCKET EVENT] Alert created for Patient ${patient._id}`
-    );
+      console.log(`[WEBSOCKET EVENT] Alert created for Patient ${patient._id}`);
+    }
   }
 };
 
