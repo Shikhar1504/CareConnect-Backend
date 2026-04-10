@@ -61,3 +61,6 @@ This project strictly adheres to a **Controller-Service-Model** architecture:
 - `/api/patients` : Clinical CRUD routes
 - `/api/ai` : Insights and Generation
 - `/api/communication` : Messaging functionality endpoints
+- `/api/analytics` : Dashboard analytics and metrics
+- `/api/alerts` : Alert notifications and resolution
+- `/api/patient/checkin` : Daily patient check-in tasks
